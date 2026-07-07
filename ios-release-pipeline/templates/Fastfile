@@ -1,0 +1,166 @@
+default_platform(:ios)
+
+SCHEME = "<Scheme>"
+UNIT_TEST_TARGET = "<UnitTestTarget>"
+USES_XCODEGEN = <true_or_false>  # true if project.yml exists
+SIMULATOR_NAME = "<SimulatorName>"  # asked of the user at scaffold time — never assumed
+
+# Build-time secrets (all read from fastlane/.env locally, or CI env). The certs repo is named
+# once, by MATCH_GIT_URL — not duplicated here.
+REQUIRED_SECRETS = %w[MATCH_GIT_URL MATCH_PASSWORD ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_CONTENT]
+
+platform :ios do
+  before_all do
+    setup_ci if is_ci
+  end
+
+  desc "Full release: bump version, run tests, build, upload to TestFlight, push"
+  lane :release do |options|
+    bump_type = options[:bump_type] || "patch"
+    version = bump_app_version(bump_type: bump_type)
+    run_unit_tests
+    build_and_upload
+    commit_tag_and_push(version: version)
+  end
+
+  desc "Quick release (no tests) — meant for the manual GitHub Action"
+  lane :release_quick do |options|
+    bump_type = options[:bump_type] || "patch"
+    version = bump_app_version(bump_type: bump_type)
+    build_and_upload
+    commit_tag_and_push(version: version)
+  end
+
+  desc "Bootstrap certs + secrets end to end (run locally once, or whenever certs need renewing)"
+  lane :setup_certs do
+    ensure_secrets_collected
+
+    api_key = asc_api_key
+    match(type: "appstore", api_key: api_key, readonly: false, skip_set_partition_list: true)
+
+    push_secrets_to_github
+    check_workflow_permissions
+  end
+
+  # ---- private helpers ----
+
+  private_lane :asc_api_key do
+    app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+  end
+
+  # Interactively collects any missing secrets by launching fastlane/scripts/collect-secrets.sh —
+  # only reachable from setup_certs, which is always run directly by a human in their own
+  # terminal, so the script's `read`/`read -s` prompts have a real TTY. Uses plain `system`, not
+  # the `sh` action, because `sh` pipes output for logging and can break interactive stdin —
+  # `system` inherits the parent process's TTY untouched.
+  private_lane :ensure_secrets_collected do
+    missing = REQUIRED_SECRETS.select { |k| ENV[k].to_s.empty? }
+    next if missing.empty?
+
+    UI.important("Missing #{missing.join(', ')} — running scripts/collect-secrets.sh to collect them.")
+    script = File.expand_path("scripts/collect-secrets.sh", __dir__)
+    UI.user_error!("collect-secrets.sh failed or was cancelled") unless system(script)
+
+    require "dotenv"
+    Dotenv.overload(File.expand_path(".env", __dir__))  # child process wrote .env; reload into this process
+  end
+
+  # Fails fast with a clear message instead of letting `match` hit a half-configured setup.
+  # Secrets present in ENV (from .env locally, or CI env) is the reliable "setup_certs has run" signal.
+  private_lane :ensure_certs_ready do
+    missing = REQUIRED_SECRETS.select { |k| ENV[k].to_s.empty? }
+    return if missing.empty?
+
+    UI.user_error!("Missing #{missing.join(', ')} — the release certs aren't set up. Run `bundle exec fastlane setup_certs` first.")
+  end
+
+  private_lane :push_secrets_to_github do
+    script = File.expand_path("scripts/set-github-secrets.sh", __dir__)
+    UI.important("Pushing secrets to GitHub repo secrets...")
+    UI.user_error!("Failed to push secrets to GitHub — run fastlane/scripts/set-github-secrets.sh manually.") unless system(script)
+  end
+
+  private_lane :check_workflow_permissions do
+    script = File.expand_path("scripts/check-workflow-permissions.sh", __dir__)
+    system(script)  # best-effort warning only — never fails the lane over it
+  end
+
+  private_lane :bump_app_version do |options|
+    bump_type = options[:bump_type] || "patch"
+
+    if USES_XCODEGEN
+      yml_path = "project.yml"
+      content = File.read(yml_path)
+      current = content[/MARKETING_VERSION:\s*"?([\d.]+)"?/, 1]
+      UI.user_error!("MARKETING_VERSION not found in #{yml_path}") unless current
+
+      major, minor, patch = current.split(".").map(&:to_i)
+      case bump_type
+      when "major" then major += 1; minor = 0; patch = 0
+      when "minor" then minor += 1; patch = 0
+      else patch += 1
+      end
+      new_version = "#{major}.#{minor}.#{patch}"
+
+      File.write(yml_path, content.sub(/MARKETING_VERSION:\s*"?[\d.]+"?/, "MARKETING_VERSION: #{new_version}"))
+      sh("xcodegen generate")
+      new_version
+    else
+      increment_version_number(bump_type: bump_type)
+      get_version_number(xcodeproj: "#{SCHEME}.xcodeproj", target: SCHEME)
+    end
+  end
+
+  private_lane :run_unit_tests do
+    run_tests(
+      scheme: SCHEME,
+      only_testing: [UNIT_TEST_TARGET],
+      devices: [SIMULATOR_NAME]
+    )
+  end
+
+  private_lane :build_and_upload do
+    ensure_certs_ready
+
+    api_key = asc_api_key
+
+    match(type: "appstore", api_key: api_key, readonly: is_ci, skip_set_partition_list: !is_ci)
+
+    bundle_id = CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "#{SCHEME}.xcodeproj",
+      team_id: CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
+      bundle_identifier: bundle_id,
+      code_sign_identity: "iPhone Distribution",
+      profile_name: "match AppStore #{bundle_id}"
+    )
+
+    latest = latest_testflight_build_number(api_key: api_key) rescue 0
+    increment_build_number(xcodeproj: "#{SCHEME}.xcodeproj", build_number: latest + 1)
+
+    build_app(scheme: SCHEME, configuration: "Release", export_method: "app-store")
+
+    upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
+  end
+
+  private_lane :commit_tag_and_push do |options|
+    version = options[:version]
+    paths = USES_XCODEGEN ? ["project.yml", "#{SCHEME}.xcodeproj/project.pbxproj"] : ["#{SCHEME}.xcodeproj/project.pbxproj"]
+
+    if is_ci
+      sh("git config user.name 'github-actions[bot]'")
+      sh("git config user.email 'github-actions[bot]@users.noreply.github.com'")
+    end
+
+    git_add(path: paths)
+    git_commit(path: paths, message: "Bump version to #{version}")
+    add_git_tag(tag: "v#{version}")
+    push_to_git_remote(tags: true)
+  end
+end
