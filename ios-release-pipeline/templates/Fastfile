@@ -1,6 +1,8 @@
 default_platform(:ios)
 
 SCHEME = "<Scheme>"
+APP_TARGET = "<AppTarget>"  # app target name — often equals the scheme, but not always
+XCODEPROJ = "<XcodeprojName>.xcodeproj"  # often <Scheme>.xcodeproj, but not always — discovered at scaffold time
 UNIT_TEST_TARGET = "<UnitTestTarget>"
 USES_XCODEGEN = <true_or_false>  # true if project.yml exists
 SIMULATOR_NAME = "<SimulatorName>"  # asked of the user at scaffold time — never assumed
@@ -111,8 +113,8 @@ platform :ios do
       sh("xcodegen generate")
       new_version
     else
-      increment_version_number(bump_type: bump_type)
-      get_version_number(xcodeproj: "#{SCHEME}.xcodeproj", target: SCHEME)
+      increment_version_number(bump_type: bump_type, xcodeproj: XCODEPROJ)
+      get_version_number(xcodeproj: XCODEPROJ, target: APP_TARGET)
     end
   end
 
@@ -134,7 +136,7 @@ platform :ios do
     bundle_id = CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
     update_code_signing_settings(
       use_automatic_signing: false,
-      path: "#{SCHEME}.xcodeproj",
+      path: XCODEPROJ,
       team_id: CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
       bundle_identifier: bundle_id,
       code_sign_identity: "iPhone Distribution",
@@ -142,7 +144,7 @@ platform :ios do
     )
 
     latest = latest_testflight_build_number(api_key: api_key) rescue 0
-    increment_build_number(xcodeproj: "#{SCHEME}.xcodeproj", build_number: latest + 1)
+    increment_build_number(xcodeproj: XCODEPROJ, build_number: latest + 1)
 
     build_app(scheme: SCHEME, configuration: "Release", export_method: "app-store")
 
@@ -151,7 +153,11 @@ platform :ios do
 
   private_lane :commit_tag_and_push do |options|
     version = options[:version]
-    paths = USES_XCODEGEN ? ["project.yml", "#{SCHEME}.xcodeproj/project.pbxproj"] : ["#{SCHEME}.xcodeproj/project.pbxproj"]
+
+    # xcodegen projects often gitignore the .xcodeproj — commit only what git actually tracks.
+    candidates = USES_XCODEGEN ? ["project.yml", "#{XCODEPROJ}/project.pbxproj"] : ["#{XCODEPROJ}/project.pbxproj"]
+    paths = candidates.select { |p| system("git", "ls-files", "--error-unmatch", p, out: File::NULL, err: File::NULL) }
+    UI.user_error!("None of #{candidates.join(', ')} are tracked by git — nothing to commit for the version bump") if paths.empty?
 
     if is_ci
       sh("git config user.name 'github-actions[bot]'")

@@ -50,17 +50,17 @@ Scaffolding asks which simulator to run tests against (never assumes one), write
 
 ## Structure
 
-Each skill is a directory with `skill.md` as the entry point, optionally alongside supporting files it links to:
+Each skill is a directory with `SKILL.md` as the entry point (uppercase — the official skill format; lowercase only works on case-insensitive filesystems), optionally alongside supporting files it links to:
 
 ```
 <skill-name>/
-  skill.md          # Instructions loaded when the skill is invoked
-  reference.md       # Supporting detail linked from skill.md
-  templates/          # Literal files to copy/adapt, when a skill scaffolds files into other repos
-  other-topic.md       # Further split-out docs for large or multi-domain skills
+  SKILL.md         # Instructions loaded when the skill is invoked
+  reference.md     # Supporting detail linked from SKILL.md
+  templates/       # Literal files to copy/adapt, when a skill scaffolds files into other repos
+  other-topic.md   # Further split-out docs for large or multi-domain skills
 ```
 
-Keep `skill.md` short and split out anything long or self-contained (design notes, gotchas, file templates) into its own file — easier to review than one large `reference.md`.
+Keep `SKILL.md` short and split out anything long or self-contained (design notes, gotchas, file templates) into its own file — easier to review than one large `reference.md`.
 
 ## Installation
 
@@ -72,11 +72,12 @@ cd ~/Developer/claude-skills
 ./install.sh
 ```
 
-`install.sh` creates a symlink in `~/.claude/skills/` for every skill directory in the repo. Skills already linked correctly are left untouched; non-symlink entries are skipped with a warning so nothing is overwritten silently.
+`install.sh` creates a symlink in `~/.claude/skills/` for every directory in the repo containing a `SKILL.md`. Skills already linked correctly are left untouched; non-symlink entries are skipped with a warning so nothing is overwritten silently; links into this repo whose skill was deleted are pruned.
 
-Git hooks (`post-merge`, `post-checkout`) run `install.sh` automatically after `git pull` or branch switches, so new skills added to the repo appear in Claude Code without any manual step.
+It also points `core.hooksPath` at the versioned [hooks/](hooks/) directory, whose `post-merge`/`post-checkout` hooks re-run `install.sh` after `git pull` or branch switches — so new skills appear in Claude Code without any manual step, on any clone.
 
 ## Adding a new skill
 
-1. Create a directory with `skill.md` (and optionally `reference.md`)
+1. Create a directory with `SKILL.md` (and optionally `reference.md`)
 2. Run `./install.sh` — the symlink is created and the skill is immediately available
+3. `./lint.sh` (also run in CI) checks shell scripts, `SKILL.md` frontmatter, and that relative markdown links resolve

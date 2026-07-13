@@ -13,6 +13,11 @@ on:
 permissions:
   contents: write
 
+# Two concurrent runs would race on the version bump and one push would be rejected.
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: macos-15
@@ -25,6 +30,13 @@ jobs:
         with:
           ruby-version: "3.3"
           bundler-cache: true
+
+      # xcodegen projects gitignore the .xcodeproj and need the tool for the version bump.
+      - name: Generate Xcode project (xcodegen projects only)
+        if: ${{ hashFiles('project.yml') != '' }}
+        run: |
+          brew install xcodegen
+          xcodegen generate
 
       - name: Release (quick, no tests)
         env:

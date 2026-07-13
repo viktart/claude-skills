@@ -12,7 +12,7 @@ Runs iOS UI tests, captures screenshots, and reports results. Reads config from 
 Read the project CLAUDE.md and extract:
 - **Scheme** — the Xcode scheme name
 - **Simulator UDID** — the recorded test simulator
-- **UI test target** — e.g. `VideoCompressorUITests`
+- **UI test target** — e.g. `MyAppUITests`
 - **Bundle ID** — for launching the app after tests
 
 If any of these are missing, run `/ios-update-test-docs` first, then resume.
@@ -52,8 +52,8 @@ Use `timeout: 300000` (5 min). For tests involving media processing use 600 000.
 ## 5. Extract screenshots
 
 ```bash
-RESULT="$(find ~/Library/Developer/Xcode/DerivedData/<Scheme>-*/Logs/Test \
-  -name "*.xcresult" | sort | tail -1)"
+# newest by modification time — filenames don't sort reliably
+RESULT="$(ls -td ~/Library/Developer/Xcode/DerivedData/<Scheme>-*/Logs/Test/*.xcresult | head -1)"
 
 for f in "$RESULT/Data/"*; do
   [[ "$(file -b "$f")" == PNG* ]] && cp "$f" "/tmp/xctest_$(basename "$f").png"

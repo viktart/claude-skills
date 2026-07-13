@@ -10,19 +10,19 @@ Sets up and runs a two-lane Fastlane release pipeline: a **full** lane (bump →
 ## 1. Detect current state
 
 ```bash
-find . -maxdepth 2 -iname "*.xcodeproj" -o -iname "project.yml" -maxdepth 2
+find . -maxdepth 2 \( -iname "*.xcodeproj" -o -iname "project.yml" \)
 test -f fastlane/Fastfile && echo "fastlane already set up"
 xcodebuild -list 2>&1   # scheme + target names
 grep -o 'MATCH_GIT_URL=.*' fastlane/.env 2>/dev/null
 ```
 
-Determine: xcodegen project (`project.yml` present) vs plain `.xcodeproj`; scheme name; unit-test target name; app target's `PRODUCT_BUNDLE_IDENTIFIER`; whether `fastlane/Fastfile` already exists; whether a companion certs repo is configured (`MATCH_GIT_URL` in `fastlane/.env` or `fastlane/Matchfile`).
+Determine: xcodegen project (`project.yml` present) vs plain `.xcodeproj`; scheme name; app target name and `.xcodeproj` file name (often but not always the same as the scheme — check, don't assume); unit-test target name; app target's `PRODUCT_BUNDLE_IDENTIFIER`; whether `fastlane/Fastfile` already exists; whether a companion certs repo is configured (`MATCH_GIT_URL` in `fastlane/.env` or `fastlane/Matchfile`).
 
 If `fastlane/Fastfile` exists and the user didn't pass `scaffold`, skip to **3. Run**. Otherwise go to **2. Scaffold**.
 
 ## 2. Scaffold
 
-1. Confirm the discovered scheme, bundle ID, team ID, and unit-test target with the user before writing anything — these get baked into committed files.
+1. Confirm the discovered scheme, app target, `.xcodeproj` name, bundle ID, team ID, and unit-test target with the user before writing anything — these get baked into committed files.
 2. **Never assume a simulator.** Run `xcrun simctl list devices available` and show the user the list — including whatever's currently booted, if anything. Even if exactly one simulator is booted, confirm it with the user rather than silently picking it; if none are booted or several are plausible, ask them to choose. The chosen name becomes `SIMULATOR_NAME` in the Fastfile.
 3. If no companion certs repo is configured: propose `<repo-name>-certificates` as the name, and **ask the user to confirm** before running `gh repo create <name> --private`. This creates a new remote resource — never do it silently.
 4. Copy each file from [templates/](templates/) to its destination (see the table in [reference.md](reference.md)), substituting the discovered values for the `<Placeholder>` tokens, including `<SimulatorName>`. Also copy all three `scripts/*.sh` into the repo at `fastlane/scripts/` and `chmod +x` them — the Fastfile invokes them from there (they must live in the repo, not the skill folder). Add `fastlane/.env` to `.gitignore` if it isn't already.

@@ -34,8 +34,8 @@ xcrun simctl io <UDID> screenshot /tmp/live.png
 Test attachments created with `XCTAttachment` end up inside the `.xcresult` bundle's `Data/` directory as files with no extension. Use `file -b` to identify PNGs:
 
 ```bash
-RESULT="$(find ~/Library/Developer/Xcode/DerivedData/<Scheme>-*/Logs/Test \
-  -name "*.xcresult" | sort | tail -1)"
+# newest by modification time — filenames don't sort reliably
+RESULT="$(ls -td ~/Library/Developer/Xcode/DerivedData/<Scheme>-*/Logs/Test/*.xcresult | head -1)"
 
 for f in "$RESULT/Data/"*; do
   [[ "$(file -b "$f")" == PNG* ]] && cp "$f" "/tmp/$(basename "$f").png"

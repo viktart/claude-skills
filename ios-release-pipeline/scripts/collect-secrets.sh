@@ -9,6 +9,7 @@ CERTS_REPO="${1:-}"
 
 mkdir -p fastlane
 touch "$ENV_FILE"
+chmod 600 "$ENV_FILE"  # holds all 6 secrets — keep it owner-only
 
 set_var() {
   local key="$1" value="$2" tmp
@@ -69,7 +70,7 @@ EOF
 read -rsp "Paste the token (input hidden): " pat
 echo
 username="$(gh api user -q .login)"
-match_git_basic_auth="$(printf '%s:%s' "$username" "$pat" | base64)"
+match_git_basic_auth="$(printf '%s:%s' "$username" "$pat" | base64 | tr -d '\n')"  # GNU base64 wraps at 76 chars
 set_var MATCH_GIT_BASIC_AUTHORIZATION "$match_git_basic_auth"
 echo "  MATCH_GIT_BASIC_AUTHORIZATION saved"
 

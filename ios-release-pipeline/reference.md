@@ -8,7 +8,7 @@ Three public Fastlane lanes share several private helpers — see [templates/Fas
 - `run_unit_tests` — builds for testing + runs the unit test target only, against `SIMULATOR_NAME` (chosen interactively at scaffold time — UI tests are out of scope here, use the `ios-run-tests` skill for those).
 - `ensure_certs_ready` — checks the 5 build-time secrets are present in ENV (loaded from `.env` locally, or CI env); `UI.user_error!`s toward `setup_certs` if any are missing, instead of letting `match` fail with a cryptic error. Secrets-in-ENV is the reliable "setup_certs has already run" signal.
 - `build_and_upload` — `ensure_certs_ready` → `match` (readonly in CI) → `increment_build_number` from the latest TestFlight build → `build_app` (archive) → `upload_to_testflight`.
-- `commit_tag_and_push(version:)` — commits the version-bump files, tags `v<version>`, pushes branch + tag.
+- `commit_tag_and_push(version:)` — commits the version-bump files (only those git tracks — xcodegen projects often gitignore the `.xcodeproj`), tags `v<version>`, pushes branch + tag.
 - `ensure_secrets_collected` / `push_secrets_to_github` / `check_workflow_permissions` — only called from `setup_certs`, see [certs-bootstrap.md](certs-bootstrap.md).
 
 `release` (full) = bump → **run_unit_tests** → build_and_upload → commit_tag_and_push.
@@ -21,13 +21,13 @@ The version bump happens first but the git push happens **last, only if everythi
 
 | Template | Destination in target repo | Placeholders to substitute |
 |---|---|---|
-| [templates/Fastfile](templates/Fastfile) | `fastlane/Fastfile` | `<Scheme>`, `<UnitTestTarget>`, `<true_or_false>` (`USES_XCODEGEN`), `<SimulatorName>` |
+| [templates/Fastfile](templates/Fastfile) | `fastlane/Fastfile` | `<Scheme>`, `<AppTarget>`, `<XcodeprojName>`, `<UnitTestTarget>`, `<true_or_false>` (`USES_XCODEGEN`), `<SimulatorName>` |
 | [templates/Appfile](templates/Appfile) | `fastlane/Appfile` | `<AppIdentifier>`, `<TeamID>` |
 | [templates/Matchfile](templates/Matchfile) | `fastlane/Matchfile` | `<AppIdentifier>`, `<TeamID>` |
 | [templates/env.example](templates/env.example) | `fastlane/.env.example` | none — copy verbatim, never fill in real values |
 | [templates/ios-release.yml](templates/ios-release.yml) | `.github/workflows/ios-release.yml` | none — copy verbatim |
 
-`<SimulatorName>` is never guessed — see skill.md scaffold step 2. The certs repo is named only by `MATCH_GIT_URL` (in `.env`/Matchfile), never duplicated into the Fastfile. Never write a real `fastlane/.env` for the user — only the `.example` file with empty values; real secrets are populated by `setup_certs` itself (see [certs-bootstrap.md](certs-bootstrap.md)).
+`<SimulatorName>` is never guessed — see SKILL.md scaffold step 2. The certs repo is named only by `MATCH_GIT_URL` (in `.env`/Matchfile), never duplicated into the Fastfile. Never write a real `fastlane/.env` for the user — only the `.example` file with empty values; real secrets are populated by `setup_certs` itself (see [certs-bootstrap.md](certs-bootstrap.md)).
 
 ## Scripts
 
@@ -56,7 +56,9 @@ Plus the default `GITHUB_TOKEN` (already checked out with `persist-credentials: 
 | `match` prompts interactively in CI | Missing `MATCH_GIT_BASIC_AUTHORIZATION` (for cloning the certs repo) or running with `readonly: false` in CI — should always be `readonly: is_ci`. |
 | Version bump committed but build/upload had already failed | Shouldn't happen — `commit_tag_and_push` is the last step in both lanes, called only if every prior step succeeded (Fastlane aborts the lane on the first failing action). |
 | Plain `.xcodeproj` project (no `project.yml`) | Set `USES_XCODEGEN = false` in the Fastfile; `bump_app_version` then uses `increment_version_number` directly on the `.xcodeproj`, no regeneration step needed. |
+| `increment_version_number`/`increment_build_number` fails with "Apple Generic Versioning is not enabled" | The project needs `VERSIONING_SYSTEM = apple-generic` (and a `CURRENT_PROJECT_VERSION`) in its build settings — set it in Xcode, or under `settings:` in `project.yml` for xcodegen projects. |
+| Version-bump commit fails: pbxproj not tracked by git | Expected for xcodegen projects that gitignore the `.xcodeproj` — `commit_tag_and_push` commits only the files git tracks (usually just `project.yml`) and errors only if *nothing* is tracked. |
 | `release`/`release_quick` errors with "run `bundle exec fastlane setup_certs` first" | `ensure_certs_ready` found required secrets missing from ENV — expected the first time, or if `setup_certs` was never run. Not a bug to work around; go run it. |
-| `collect-secrets.sh` prompts hang or produce garbled output when run through an agent/tool call | It was invoked through a non-interactive shell instead of directly by the user — `setup_certs` is meant to be run by the user in a real terminal (skill.md scaffold step 6). |
+| `collect-secrets.sh` prompts hang or produce garbled output when run through an agent/tool call | It was invoked through a non-interactive shell instead of directly by the user — `setup_certs` is meant to be run by the user in a real terminal (SKILL.md scaffold step 6). |
 | `setup_certs` fails with "No such file … scripts/collect-secrets.sh" | The scripts weren't copied into the repo. They must be at `fastlane/scripts/` (scaffold step 4), not left in the skill folder — the Fastfile resolves them relative to `fastlane/`. |
 | `Dotenv` not defined / `require "dotenv"` fails | It's `require`d lazily inside `ensure_secrets_collected` (not at file top, so `release_quick`/CI never load it). fastlane bundles the dotenv gem, so the require resolves; if it somehow doesn't, `bundle add dotenv`. |
