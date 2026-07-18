@@ -4,13 +4,14 @@
 # Run locally or via .github/workflows/lint.yml.
 set -uo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 fail=0
 
 # --- shell scripts ---
 if command -v shellcheck >/dev/null 2>&1; then
   shellcheck install.sh lint.sh hooks/post-merge hooks/post-checkout \
-    ios-release-pipeline/scripts/*.sh || fail=1
+    ios-release-pipeline/scripts/*.sh \
+    test/*.sh test/unit/*.sh test/scenarios/*/*.sh || fail=1
 else
   echo "  warn shellcheck not installed — skipping shell lint" >&2
 fi
@@ -18,7 +19,7 @@ fi
 # --- skill structure ---
 for dir in */; do
   name="${dir%/}"
-  case "$name" in hooks) continue ;; esac
+  case "$name" in hooks|test) continue ;; esac
 
   if [[ ! -f "${dir}SKILL.md" ]]; then
     echo "FAIL: $name/ has no SKILL.md" >&2
