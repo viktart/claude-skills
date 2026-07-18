@@ -18,8 +18,8 @@ assert_file() {
   [[ -e "$1" ]] || { echo "ASSERT: missing file $1" >&2; exit 1; }
 }
 
-file_mode() {  # portable stat: BSD (macOS) first, then GNU
-  stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"
+file_mode() {  # portable stat — GNU first: BSD rejects -c, but GNU accepts -f (as filesystem status)
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
 }
 
 b64_decode() {  # portable base64 decode of a single-line value on stdin
