@@ -11,3 +11,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./lint.sh
+      - run: ./test/run-tests.sh

@@ -76,6 +76,17 @@ cd ~/Developer/claude-skills
 
 It also points `core.hooksPath` at the versioned [hooks/](hooks/) directory, whose `post-merge`/`post-checkout` hooks re-run `install.sh` after `git pull` or branch switches — so new skills appear in Claude Code without any manual step, on any clone.
 
+## Testing
+
+Two layers, split by cost and determinism — see [test/](test/):
+
+- **`./test/run-tests.sh`** — deterministic tests, no LLM and no Xcode: `install.sh` behavior (link/skip/prune/idempotence), the release-pipeline shell scripts against a stubbed `gh`, Fastfile template rendering (`ruby -c` on a substituted copy), and a placeholder-drift check that every template's `<Tokens>` match what `reference.md` documents. Runs in CI on every push, alongside `./lint.sh`.
+- **`./test/run-scenarios.sh [name…]`** — agentic scenarios: spawns headless Claude Code (`claude -p`) in a disposable copy of the fixture app at [test/fixtures/DemoApp](test/fixtures/DemoApp) and asserts deterministic post-conditions with each scenario's `verify.sh`. Local-Mac only (needs Xcode, `xcodegen`, a simulator, and Claude Code auth) — costs tokens and minutes, so it's deliberately not in CI. Run it before tagging changes to the skills.
+  - `release-scaffold` — `/ios-release-pipeline scaffold`: all files land, zero unsubstituted placeholder tokens, `.env` gitignored and never written, certs-repo creation declined.
+  - `test-docs-and-run` — `/ios-update-test-docs` then `/ios-run-tests`: CLAUDE.md sections written with the real bundle ID and a simulator UDID, UI test passes, screenshots extracted.
+
+Scenario prompts pre-answer the questions the skills would normally ask (simulator choice, certs-repo confirmation), since headless runs can't be interactive. The certs/TestFlight half of the release pipeline stays a manual, occasional test by design — it needs real Apple credentials and consumes cert slots.
+
 ## Adding a new skill
 
 1. Create a directory with `SKILL.md` (and optionally `reference.md`)
