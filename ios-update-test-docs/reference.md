@@ -38,11 +38,11 @@ Test attachments created with `XCTAttachment` end up inside the `.xcresult` bund
 RESULT="$(ls -td ~/Library/Developer/Xcode/DerivedData/<Scheme>-*/Logs/Test/*.xcresult | head -1)"
 
 for f in "$RESULT/Data/"*; do
-  [[ "$(file -b "$f")" == PNG* ]] && cp "$f" "/tmp/$(basename "$f").png"
+  [[ "$(file -b "$f")" == PNG* ]] && cp "$f" "/tmp/xctest_$(basename "$f").png"
 done
 ```
 
-Then `Read` each `/tmp/*.png` to inspect them.
+Then `Read` each `/tmp/xctest_*.png` to inspect them. Keep the `xctest_` prefix — it's the shared convention with the `ios-run-tests` skill, which reads (and other tooling verifies) `/tmp/xctest_*.png`.
 
 **Required in test code** — attachments are deleted on success by default:
 ```swift
