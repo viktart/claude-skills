@@ -7,7 +7,6 @@ need() { [[ -e "$1" ]] || { echo "missing: $1" >&2; fail=1; }; }
 
 need fastlane/Fastfile
 need fastlane/Appfile
-need fastlane/Matchfile
 need fastlane/.env.example
 need .github/workflows/ios-release.yml
 for s in collect-secrets.sh set-github-secrets.sh check-workflow-permissions.sh; do
@@ -15,7 +14,7 @@ for s in collect-secrets.sh set-github-secrets.sh check-workflow-permissions.sh;
 done
 
 # the single highest-value assertion: no template token survived scaffolding
-if grep -rnE '<[A-Za-z_]+>' fastlane/Fastfile fastlane/Appfile fastlane/Matchfile 2>/dev/null; then
+if grep -rnE '<[A-Za-z_]+>' fastlane/Fastfile fastlane/Appfile 2>/dev/null; then
   echo "unsubstituted placeholder tokens remain" >&2
   fail=1
 fi

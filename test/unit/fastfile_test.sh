@@ -29,7 +29,7 @@ else
 fi
 
 # placeholder drift: tokens in each template == tokens documented in reference.md's table
-for tpl in Fastfile Appfile Matchfile env.example ios-release.yml; do
+for tpl in Fastfile Appfile env.example ios-release.yml; do
   file_tokens="$(grep -ohE '<[A-Za-z_]+>' "$TEMPLATES/$tpl" | sort -u || true)"
   doc_row="$(grep -E "^\| \[templates/$tpl\]" "$REF" || true)"
   [[ -n "$doc_row" ]] || { echo "reference.md table has no row for templates/$tpl" >&2; exit 1; }

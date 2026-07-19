@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Pushes the 6 pipeline secrets from a local fastlane/.env to GitHub repo secrets.
+# Pushes the 3 pipeline secrets from a local fastlane/.env to GitHub repo secrets.
 # Values never pass through anything but this shell — read straight from .env, sent straight to `gh`.
 set -euo pipefail
 
 ENV_FILE="${1:-fastlane/.env}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  echo "Missing $ENV_FILE — populate it first (see certs-bootstrap.md)." >&2
+  echo "Missing $ENV_FILE — populate it first (see secrets-bootstrap.md)." >&2
   exit 1
 fi
 
-REQUIRED_KEYS=(ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_CONTENT MATCH_GIT_URL MATCH_PASSWORD MATCH_GIT_BASIC_AUTHORIZATION)
+REQUIRED_KEYS=(ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_CONTENT)
 
 set -a
 # shellcheck disable=SC1090

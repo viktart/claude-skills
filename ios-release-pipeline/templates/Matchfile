@@ -1,6 +1,0 @@
-storage_mode "git"
-git_url ENV["MATCH_GIT_URL"]
-
-type "appstore"
-app_identifier ["<AppIdentifier>"]
-team_id "<TeamID>"
